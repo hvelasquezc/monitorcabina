@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MonitorCabina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: panel de control de cabina — entradas a la izquierda, estado al centro, "dentro del computador" a la derecha */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --ink:#18212b; --muted:#5b6774; --line:#d5dbe2;
+  --accent:#2753a8; --accent-ink:#ffffff;
+  --ok:#1e8a4c; --ok-bg:#e3f4ea; --warn:#b36b00; --warn-bg:#fff1d6; --crit:#c0322b; --crit-bg:#fde4e2; --idle:#3c6fb5; --idle-bg:#e2ecf8;
+  --lcd:#1d2b22; --lcd-ink:#9ff0b8;
+  --display:"IBM Plex Sans",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#11161c; --surface:#19212a; --ink:#e4e9ee; --muted:#9aa6b2; --line:#2b3642;
+    --accent:#7aa2f0; --accent-ink:#0d1520;
+    --ok:#4cc27e; --ok-bg:#163223; --warn:#f0a83a; --warn-bg:#36290f; --crit:#ff6b62; --crit-bg:#3a1a18; --idle:#7aa2f0; --idle-bg:#18263a;
+    --lcd:#0b130e; --lcd-ink:#8fe6a9;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#11161c; --surface:#19212a; --ink:#e4e9ee; --muted:#9aa6b2; --line:#2b3642;
+  --accent:#7aa2f0; --accent-ink:#0d1520;
+  --ok:#4cc27e; --ok-bg:#163223; --warn:#f0a83a; --warn-bg:#36290f; --crit:#ff6b62; --crit-bg:#3a1a18; --idle:#7aa2f0; --idle-bg:#18263a;
+  --lcd:#0b130e; --lcd-ink:#8fe6a9;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+header{padding:20px 20px 8px;max-width:1400px;margin:0 auto}
+h1{font-family:var(--display);font-size:26px;margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:4px 0 0;color:var(--muted);max-width:80ch}
+main{max-width:1400px;margin:0 auto;padding:12px 20px 32px;display:grid;grid-template-columns:minmax(260px,320px) minmax(300px,1fr) minmax(300px,420px);gap:16px;align-items:start}
+@media (max-width:1100px){main{grid-template-columns:1fr 1fr}.col-arch{grid-column:1 / -1}}
+@media (max-width:720px){main{grid-template-columns:1fr;padding:12px 16px 28px}header{padding:16px 16px 4px}}
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.col{display:flex;flex-direction:column;gap:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px;font-weight:600}
+.field{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin-bottom:12px}
+.field label{font-weight:500}
+.field output{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+.field input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--accent)}
+.field .fail{grid-column:1 / -1;font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center}
+button{font:inherit;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+select{font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);max-width:100%}
+.status{display:flex;align-items:center;gap:14px;padding:14px;border-radius:10px;border:2px solid var(--line)}
+.status .big{font-family:var(--display);font-size:28px;font-weight:700;letter-spacing:.02em}
+.status .code{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.s-ok{background:var(--ok-bg);border-color:var(--ok)} .s-ok .big{color:var(--ok)}
+.s-warn{background:var(--warn-bg);border-color:var(--warn)} .s-warn .big{color:var(--warn)}
+.s-crit{background:var(--crit-bg);border-color:var(--crit)} .s-crit .big{color:var(--crit)}
+.s-idle{background:var(--idle-bg);border-color:var(--idle)} .s-idle .big{color:var(--idle)}
+.lights{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+@media (max-width:420px){.lights{grid-template-columns:repeat(2,1fr)}}
+.light{border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:4px;border-left-width:6px}
+.light .n{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.light .v{font-family:var(--mono);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.light .t{font-size:12px;font-weight:600}
+.l-ok{border-left-color:var(--ok)} .l-ok .t{color:var(--ok)}
+.l-warn{border-left-color:var(--warn)} .l-warn .t{color:var(--warn)}
+.l-crit{border-left-color:var(--crit)} .l-crit .t{color:var(--crit)}
+.lcd{background:var(--lcd);color:var(--lcd-ink);font-family:var(--mono);border-radius:8px;padding:10px 12px;font-size:15px;white-space:pre;overflow-x:auto;margin-top:12px;line-height:1.5}
+.alarm{display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:600}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--line)}
+.dot.on{background:var(--crit);animation:blink .6s steps(2) infinite}
+@media (prefers-reduced-motion: reduce){.dot.on{animation:none}}
+@keyframes blink{50%{opacity:.25}}
+ul.reco{margin:6px 0 0;padding-left:18px} ul.reco li{margin:3px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.mono,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+ol.trace{margin:0;padding-left:20px;font-size:13.5px} ol.trace li{margin:4px 0} ol.trace code{font-family:var(--mono);font-size:12.5px;background:var(--bg);padding:1px 4px;border-radius:4px}
+.flag{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:0 5px;border-radius:4px;border:1px solid var(--line);margin-left:2px}
+.flag.set{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pass{color:var(--ok);font-weight:700} .failt{color:var(--crit);font-weight:700}
+.stepbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.stepbar span{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.stepbar span.on{border-color:var(--accent);color:var(--accent);font-weight:600}
+footer{max-width:1400px;margin:0 auto;padding:0 20px 28px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>MonitorCabina</h1>
+  <p>Prototipo educativo (Caso 12, Arquitectura del Computador). Simula el monitoreo de un equipo de una cabina de internet o LAN center: lee CPU, memoria RAM, disco y temperatura, clasifica el estado del equipo y recomienda acciones. Los valores son simulados; no es un software instalado.</p>
+</header>
+<main>
+  <!-- ENTRADAS -->
+  <div class="col">
+    <section class="card" aria-labelledby="h-in">
+      <h2 id="h-in">1 · Entradas (una lectura cada 5 s)</h2>
+      <div class="field"><label for="cpu">Uso de CPU</label><output id="o-cpu"></output>
+        <input type="range" id="cpu" min="0" max="100" value="35">
+        <span class="fail"><input type="checkbox" id="f-cpu"><label for="f-cpu">Simular falla de lectura</label></span></div>
+      <div class="field"><label for="ram">RAM usada (de 8,0 GB)</label><output id="o-ram"></output>
+        <input type="range" id="ram" min="0" max="80" value="40">
+        <span class="fail"><input type="checkbox" id="f-ram"><label for="f-ram">Simular falla de lectura</label></span></div>
+      <div class="field"><label for="disk">Disco usado</label><output id="o-disk"></output>
+        <input type="range" id="disk" min="0" max="100" value="60">
+        <span class="fail"><input type="checkbox" id="f-disk"><label for="f-disk">Simular falla de lectura</label></span></div>
+      <div class="field"><label for="temp">Temperatura de la CPU</label><output id="o-temp"></output>
+        <input type="range" id="temp" min="20" max="110" value="55">
+        <span class="fail"><input type="checkbox" id="f-temp"><label for="f-temp">Simular falla de lectura</label></span></div>
+      <div class="field"><label for="idle">Minutos sin usuario</label><output id="o-idle"></output>
+        <input type="range" id="idle" min="0" max="60" value="0"></div>
+      <div class="row">
+        <button class="primary" id="btn-read">Tomar lectura</button>
+        <button id="btn-auto" aria-pressed="false">Lectura automática</button>
+        <button id="btn-reset">Reiniciar memoria</button>
+      </div>
+      <p class="hint">Cada clic en «Tomar lectura» es un ciclo del procesador: leer, calcular, guardar y mostrar.</p>
+    </section>
+    <section class="card" aria-labelledby="h-esc">
+      <h2 id="h-esc">Escenarios</h2>
+      <div class="row">
+        <button data-scn="normal">Normal</button>
+        <button data-scn="adv">Advertencia</button>
+        <button data-scn="crit">Crítico</button>
+        <button data-scn="idle">Inactivo</button>
+      </div>
+      <p class="hint">Carga los valores de cada escenario y toma una lectura.</p>
+    </section>
+    <section class="card" aria-labelledby="h-snd">
+      <h2 id="h-snd">Sonido</h2>
+      <label><input type="checkbox" id="snd"> Reproducir la alerta sonora en estado CRÍTICO</label>
+    </section>
+  </div>
+
+  <!-- SALIDAS -->
+  <div class="col">
+    <section class="card" aria-labelledby="h-out">
+      <h2 id="h-out">4 · Salida: panel del encargado</h2>
+      <div id="status" class="status s-ok"><div><div class="big" id="st-name">ÓPTIMO</div><div class="code" id="st-code">estado = 0</div></div></div>
+      <div class="lights" id="lights"></div>
+      <div class="lcd" id="lcd" aria-label="Pantalla del panel"></div>
+      <div class="alarm"><span class="dot" id="alarm-dot"></span><span id="alarm-txt">Alerta sonora apagada</span></div>
+      <h2 style="margin-top:14px">Recomendaciones</h2>
+      <ul class="reco" id="reco"></ul>
+      <p class="hint" id="trend"></p>
+    </section>
+    <section class="card" aria-labelledby="h-log">
+      <h2 id="h-log">Registro de eventos (memoria)</h2>
+      <div class="scroll"><table><thead><tr><th>Lectura</th><th>Estado</th><th>Motivo</th></tr></thead><tbody id="log"></tbody></table></div>
+    </section>
+    <section class="card" aria-labelledby="h-tests">
+      <h2 id="h-tests">Casos de prueba</h2>
+      <div class="row"><select id="case-sel" aria-label="Caso de prueba"></select><button id="btn-case">Ejecutar caso</button><button id="btn-all">Ejecutar los 11</button></div>
+      <p class="hint" id="case-desc"></p>
+      <div class="scroll"><table><thead><tr><th>ID</th><th>Esperado</th><th>Obtenido</th><th>Resultado</th></tr></thead><tbody id="results"></tbody></table></div>
+    </section>
+  </div>
+
+  <!-- ARQUITECTURA -->
+  <div class="col col-arch">
+    <section class="card" aria-labelledby="h-arch">
+      <h2 id="h-arch">2 · Procesamiento: lo que hace la CPU en esta lectura</h2>
+      <div class="stepbar"><span class="on">Entrada</span><span class="on">Unidad de control</span><span class="on">ALU</span><span class="on">Memoria</span><span class="on">Salida</span></div>
+      <ol class="trace" id="trace"></ol>
+    </section>
+    <section class="card" aria-labelledby="h-mem">
+      <h2 id="h-mem">3 · Memoria</h2>
+      <dl class="kv" id="mem"></dl>
+      <h2 style="margin-top:12px">Historial de temperatura (RAM, 6 celdas)</h2>
+      <div class="scroll"><table><thead><tr id="hist-h"></tr></thead><tbody><tr id="hist-v"></tr></tbody></table></div>
+    </section>
+    <section class="card" aria-labelledby="h-bases">
+      <h2 id="h-bases">Datos en decimal, binario y hexadecimal</h2>
+      <div class="scroll"><table><thead><tr><th>Dato</th><th>DEC</th><th>BIN</th><th>HEX</th></tr></thead><tbody id="bases"></tbody></table></div>
+    </section>
+  </div>
+</main>
+<footer>MonitorCabina · prototipo académico de Hugo Velásquez Cahuancho · Umbrales y potencia de referencia definidos para la simulación; en un local real se calibrarían según cada equipo.</footer>
+
+<script>
+// ---------------- MEMORIA NO VOLÁTIL (constantes, como en Flash) ----------------
+const ROM = {
+  CPU_AMA: 80, CPU_ROJO: 95,
+  RAM_AMA: 80, RAM_ROJO: 95,
+  DSK_AMA: 85, DSK_ROJO: 95,
+  TMP_AMA: 80, TMP_ROJO: 95,
+  RAM_TOTAL_DGB: 80,          // 8,0 GB guardado en décimas: 80
+  CONFIRMAR: 3,               // lecturas seguidas en rojo para CPU y RAM
+  INACTIVO_MIN: 15,
+  TEND_UMBRAL: 3,             // °C de diferencia para decir sube/baja
+  POTENCIA_W: 250             // potencia de referencia de un equipo (supuesto)
+};
+const NOMBRES = ['ÓPTIMO','ADVERTENCIA','CRÍTICO','INACTIVO'];
+const CLASE = ['s-ok','s-warn','s-crit','s-idle'];
+
+// ---------------- MEMORIA VOLÁTIL (RAM) ----------------
+let mem;
+function resetMem(){
+  mem = { lectura:0, cntRojoCPU:0, cntRojoRAM:0, hist:[], estado:0, estadoAnt:0, log:[] };
+}
+resetMem();
+
+const $ = id => document.getElementById(id);
+const ids = ['cpu','ram','disk','temp','idle'];
+let override = null;   // valores crudos inyectados por un caso de prueba (p. ej., 150)
+
+function readInputs(){
+  if (override) return override;
+  return {
+    cpu: $('f-cpu').checked ? -1 : +$('cpu').value,
+    ramDgb: $('f-ram').checked ? -1 : +$('ram').value,
+    disk: $('f-disk').checked ? -1 : +$('disk').value,
+    temp: $('f-temp').checked ? -1 : +$('temp').value,
+    idle: +$('idle').value
+  };
+}
+function showInputs(){
+  $('o-cpu').textContent = $('f-cpu').checked ? 'FALLA' : $('cpu').value + ' %';
+  $('o-ram').textContent = $('f-ram').checked ? 'FALLA' : (+$('ram').value/10).toFixed(1).replace('.',',') + ' GB';
+  $('o-disk').textContent = $('f-disk').checked ? 'FALLA' : $('disk').value + ' %';
+  $('o-temp').textContent = $('f-temp').checked ? 'FALLA' : $('temp').value + ' °C';
+  $('o-idle').textContent = $('idle').value + ' min';
+}
+
+// Comparación como la hace la ALU: resta sin guardar el resultado y banderas C (préstamo) y Z (cero)
+function cmp(a,b){ const r=a-b; return {r, C: a<b ? 1:0, Z: a===b ? 1:0}; }
+function flags(f){ return `<span class="flag ${f.C?'set':''}">C=${f.C}</span><span class="flag ${f.Z?'set':''}">Z=${f.Z}</span>`; }
+function bin8(v){ return (v & 255).toString(2).padStart(8,'0').replace(/(\d{4})/,'$1 '); }
+function hex2(v){ return (v & 255).toString(16).toUpperCase().padStart(2,'0'); }
+
+// ---------------- UN CICLO: leer → procesar → guardar → mostrar ----------------
+function ciclo(){
+  const x = readInputs();
+  const tr = [];
+  mem.lectura++;
+  tr.push(`<b>Entrada:</b> la unidad de control lee los contadores del equipo: CPU = <code>${x.cpu}</code>, RAM = <code>${x.ramDgb<0?-1:(x.ramDgb/10).toFixed(1)} GB</code>, disco = <code>${x.disk}</code>, temperatura = <code>${x.temp}</code>, inactividad = <code>${x.idle} min</code>.`);
+
+  // Validación (lectura inválida)
+  const falla = {cpu:false, ram:false, disk:false, temp:false};
+  const valid = (v,max) => v>=0 && v<=max;
+  if (!valid(x.cpu,100)) falla.cpu = true;
+  if (!valid(x.ramDgb,ROM.RAM_TOTAL_DGB)) falla.ram = true;
+  if (!valid(x.disk,100)) falla.disk = true;
+  if (!valid(x.temp,120)) falla.temp = true;
+  const hayFalla = falla.cpu||falla.ram||falla.disk||falla.temp;
+  if (hayFalla) tr.push(`<b>ALU – validación:</b> ${Object.keys(falla).filter(k=>falla[k]).map(k=>k.toUpperCase()).join(', ')} fuera del rango válido (o sin dato, −1) → se marca <b>FALLA</b>; no se toma como valor normal.`);
+
+  // RAM %: (usado × 100) ÷ total, con enteros
+  let ramPct = -1;
+  if (!falla.ram){ ramPct = Math.floor(x.ramDgb*100/ROM.RAM_TOTAL_DGB);
+    tr.push(`<b>ALU – aritmética:</b> RAM % = (<code>${x.ramDgb}</code> × 100) ÷ <code>${ROM.RAM_TOTAL_DGB}</code> = <code>${ramPct}</code> (décimas de GB, división entera).`); }
+
+  // Clasificación de cada métrica
+  const m = {cpu:x.cpu, ram:ramPct, disk:x.disk, temp:x.temp};
+  const lim = {cpu:[ROM.CPU_AMA,ROM.CPU_ROJO], ram:[ROM.RAM_AMA,ROM.RAM_ROJO], disk:[ROM.DSK_AMA,ROM.DSK_ROJO], temp:[ROM.TMP_AMA,ROM.TMP_ROJO]};
+  const color = {};
+  for (const k of ['cpu','ram','disk','temp']){
+    if (falla[k]){ color[k]='falla'; continue; }
+    const fr = cmp(m[k],lim[k][1]), fa = cmp(m[k],lim[k][0]);
+    if (!fr.C) color[k]='rojo'; else if (!fa.C) color[k]='ama'; else color[k]='verde';
+    if (k==='temp' || color[k]!=='verde' || k==='cpu')
+      tr.push(`<b>ALU – comparación ${k.toUpperCase()}:</b> <code>${m[k]} − ${lim[k][0]} = ${fa.r}</code> ${flags(fa)} · <code>${m[k]} − ${lim[k][1]} = ${fr.r}</code> ${flags(fr)} → ${color[k]==='rojo'?'rojo':color[k]==='ama'?'amarillo':'verde'}.`);
+  }
+
+  // Confirmación por lecturas seguidas (CPU y RAM)
+  mem.cntRojoCPU = color.cpu==='rojo' ? mem.cntRojoCPU+1 : 0;
+  mem.cntRojoRAM = color.ram==='rojo' ? mem.cntRojoRAM+1 : 0;
+  const rCPU = mem.cntRojoCPU >= ROM.CONFIRMAR, rRAM = mem.cntRojoRAM >= ROM.CONFIRMAR;
+  if (color.cpu==='rojo') tr.push(`<b>ALU – contador:</b> lecturas seguidas de CPU en rojo = <code>${mem.cntRojoCPU}</code>; <code>${mem.cntRojoCPU} − ${ROM.CONFIRMAR}</code> ${flags(cmp(mem.cntRojoCPU,ROM.CONFIRMAR))} → ${rCPU?'confirmado':'aún no confirmado (puede ser un pico momentáneo)'}.`);
+  if (color.ram==='rojo') tr.push(`<b>ALU – contador:</b> lecturas seguidas de RAM en rojo = <code>${mem.cntRojoRAM}</code> → ${rRAM?'confirmado':'aún no confirmado'}.`);
+
+  // Tendencia de temperatura con el historial
+  if (!falla.temp){ mem.hist.push(x.temp); if (mem.hist.length>6) mem.hist.shift(); }
+  let tend = 'sin datos suficientes';
+  if (mem.hist.length>=4){
+    const actual = mem.hist[mem.hist.length-1], antes = mem.hist[mem.hist.length-4], d = actual-antes;
+    tend = d>=ROM.TEND_UMBRAL ? 'SUBE' : d<=-ROM.TEND_UMBRAL ? 'BAJA' : 'ESTABLE';
+    tr.push(`<b>ALU – resta (tendencia):</b> temperatura actual − hace 3 lecturas = <code>${actual} − ${antes} = ${d>0?'+':''}${d}</code> → ${tend}.`);
+  }
+
+  // Lógica del estado
+  const rDisk = color.disk==='rojo', rTemp = color.temp==='rojo';
+  const critico = rCPU||rRAM||rDisk||rTemp;
+  const pendiente = (color.cpu==='rojo'&&!rCPU)||(color.ram==='rojo'&&!rRAM);
+  const algunAma = ['cpu','ram','disk','temp'].some(k=>color[k]==='ama');
+  let estado;
+  if (critico) estado=2; else if (algunAma||pendiente||hayFalla) estado=1; else if (x.idle>=ROM.INACTIVO_MIN) estado=3; else estado=0;
+  tr.push(`<b>Unidad de control – lógica:</b> CRÍTICO = rCPU OR rRAM OR rDISCO OR rTEMP = <code>${+rCPU} OR ${+rRAM} OR ${+rDisk} OR ${+rTemp} = ${+critico}</code>; ADVERTENCIA = amarillo OR rojo sin confirmar OR falla = <code>${+(algunAma||pendiente||hayFalla)}</code> → estado <b>${NOMBRES[estado]}</b> (código ${estado}).`);
+
+  // Byte de alertas: bit0 CPU, bit1 RAM, bit2 disco, bit3 temperatura, bit4 falla
+  const bit = k => color[k]!=='verde' ? 1 : 0;
+  const alertas = bit('cpu') | bit('ram')<<1 | bit('disk')<<2 | bit('temp')<<3 | (hayFalla?1:0)<<4;
+  tr.push(`<b>Memoria:</b> se guardan el byte de alertas <code>${bin8(alertas)}</code> (0x${hex2(alertas)}), el estado <code>${estado}</code>, los contadores y la temperatura en el historial.`);
+
+  // Ahorro por inactividad
+  const ahorroWh = estado===3 ? Math.round(ROM.POTENCIA_W*x.idle/60) : 0;
+  if (estado===3) tr.push(`<b>ALU – ahorro:</b> potencia × tiempo = <code>${ROM.POTENCIA_W} W × ${x.idle} min ÷ 60 = ${ahorroWh} Wh</code> que se habrían consumido sin uso.`);
+
+  // Recomendaciones
+  const reco = [];
+  if (falla.cpu||falla.ram||falla.disk||falla.temp) reco.push('Revisar el agente de monitoreo o el sensor: hay una lectura inválida. El equipo no se considera óptimo hasta tener un dato válido.');
+  if (color.temp!=='verde' && !falla.temp) reco.push('Temperatura alta: limpiar el polvo de ventiladores y disipador, revisar la pasta térmica y la ventilación del local.');
+  if (color.cpu!=='verde' && !falla.cpu) reco.push('CPU alta: cerrar programas en segundo plano, revisar programas de inicio y descartar malware.');
+  if (color.ram!=='verde' && !falla.ram) reco.push('RAM alta: cerrar aplicaciones; si ocurre seguido con los juegos del local, ampliar la memoria (por ejemplo, de 8 a 16 GB).');
+  if (color.disk!=='verde' && !falla.disk) reco.push('Disco casi lleno: borrar temporales y cachés de juegos, desinstalar lo que no se usa o agregar un SSD.');
+  if (estado===3) reco.push(`Equipo sin uso ${x.idle} min: suspenderlo o apagarlo (ahorro estimado: ${ahorroWh} Wh).`);
+  if (!reco.length) reco.push('Sin acciones: el equipo funciona dentro de los rangos.');
+
+  // Guardar en memoria y registrar evento
+  mem.estadoAnt = mem.estado; mem.estado = estado;
+  const motivo = estado===2 ? ['cpu','ram','disk','temp'].filter(k=>({cpu:rCPU,ram:rRAM,disk:rDisk,temp:rTemp})[k]).map(k=>k.toUpperCase()+' en rojo').join(', ')
+               : estado===1 ? (hayFalla?'Falla de lectura':'')+(algunAma?(hayFalla?', ':'')+'Valor en amarillo':'')+(pendiente?((hayFalla||algunAma)?', ':'')+'Rojo sin confirmar':'')
+               : estado===3 ? 'Inactivo '+x.idle+' min' : 'Todo en verde';
+  mem.log.unshift({n:mem.lectura, e:estado, m:motivo}); if (mem.log.length>8) mem.log.pop();
+
+  render({x, m, color, falla, estado, tend, reco, alertas, ramPct, ahorroWh, tr});
+  return estado;
+}
+
+// ---------------- MOSTRAR (salidas) ----------------
+function render(s){
+  const st = $('status'); st.className = 'status ' + CLASE[s.estado];
+  $('st-name').textContent = NOMBRES[s.estado];
+  $('st-code').textContent = `estado = ${s.estado} · lectura n.º ${mem.lectura}`;
+  const lab = {cpu:'CPU', ram:'RAM', disk:'Disco', temp:'Temp.'};
+  const val = {cpu:s.m.cpu+' %', ram:s.ramPct+' %', disk:s.m.disk+' %', temp:s.m.temp+' °C'};
+  $('lights').innerHTML = ['cpu','ram','disk','temp'].map(k=>{
+    const c = s.color[k]; const cls = c==='verde'?'l-ok':c==='rojo'?'l-crit':'l-warn';
+    const t = c==='verde'?'VERDE':c==='ama'?'AMARILLO':c==='rojo'?'ROJO':'FALLA';
+    return `<div class="light ${cls}"><span class="n">${lab[k]}</span><span class="v">${s.falla[k]?'ERR':val[k]}</span><span class="t">${t}</span></div>`;
+  }).join('');
+  const f = (k,txt) => s.falla[k] ? 'ERR' : txt;
+  const l1 = `CPU:${f('cpu',String(s.m.cpu).padStart(3))} RAM:${f('ram',String(s.ramPct).padStart(3))}`;
+  const l2 = `DSK:${f('disk',String(s.m.disk).padStart(3))} T:${f('temp',String(s.m.temp).padStart(3))}C`;
+  const l3 = ['EST: OPTIMO','EST: ADVERTENCIA','EST: CRITICO','EST: INACTIVO'][s.estado];
+  $('lcd').textContent = l1 + '\n' + l2 + '\n' + l3;
+  const on = s.estado===2;
+  $('alarm-dot').classList.toggle('on', on);
+  $('alarm-txt').textContent = on ? 'Alerta sonora ACTIVA (estado crítico)' : 'Alerta sonora apagada';
+  if (on && $('snd').checked) beep();
+  $('reco').innerHTML = s.reco.map(r=>`<li>${r}</li>`).join('');
+  $('trend').textContent = 'Tendencia de la temperatura: ' + s.tend + '.';
+  $('trace').innerHTML = s.tr.map(t=>`<li>${t}</li>`).join('');
+  $('mem').innerHTML = `
+    <dt>Umbrales (Flash)</dt><dd>CPU ${ROM.CPU_AMA}/${ROM.CPU_ROJO} · RAM ${ROM.RAM_AMA}/${ROM.RAM_ROJO} · Disco ${ROM.DSK_AMA}/${ROM.DSK_ROJO} · Temp ${ROM.TMP_AMA}/${ROM.TMP_ROJO}</dd>
+    <dt>Contador CPU en rojo</dt><dd>${mem.cntRojoCPU} de ${ROM.CONFIRMAR}</dd>
+    <dt>Contador RAM en rojo</dt><dd>${mem.cntRojoRAM} de ${ROM.CONFIRMAR}</dd>
+    <dt>Byte de alertas</dt><dd>${bin8(s.alertas)} = 0x${hex2(s.alertas)}</dd>
+    <dt>Estado guardado</dt><dd>${s.estado} (anterior: ${mem.estadoAnt})</dd>`;
+  $('hist-h').innerHTML = [0,1,2,3,4,5].map(i=>`<th>[${i}]</th>`).join('');
+  $('hist-v').innerHTML = [0,1,2,3,4,5].map(i=>`<td class="mono">${mem.hist[i]??'—'}</td>`).join('');
+  const rows = [
+    ['Uso de CPU (%)', s.falla.cpu?null:s.m.cpu], ['RAM (%)', s.falla.ram?null:s.ramPct],
+    ['Temperatura (°C)', s.falla.temp?null:s.m.temp], ['Umbral rojo de temperatura', ROM.TMP_ROJO],
+    ['Umbral amarillo de CPU y RAM', ROM.CPU_AMA], ['Byte de alertas', s.alertas], ['Código de estado', s.estado]];
+  $('bases').innerHTML = rows.map(([n,v])=> v===null ? `<tr><td>${n}</td><td colspan="3" class="mono">FALLA (sin dato)</td></tr>`
+     : `<tr><td>${n}</td><td class="mono">${v}</td><td class="mono">${bin8(v)}</td><td class="mono">${hex2(v)}</td></tr>`).join('');
+  $('log').innerHTML = mem.log.map(e=>`<tr><td class="mono">${e.n}</td><td>${NOMBRES[e.e]}</td><td>${e.m}</td></tr>`).join('');
+}
+
+let actx = null;
+function beep(){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    [0,0.25].forEach(t=>{ const o=actx.createOscillator(), g=actx.createGain();
+      o.frequency.value=880; g.gain.value=0.08; o.connect(g); g.connect(actx.destination);
+      o.start(actx.currentTime+t); o.stop(actx.currentTime+t+0.15); });
+  }catch(e){}
+}
+
+// ---------------- Controles ----------------
+ids.forEach(id=>$(id).addEventListener('input', showInputs));
+['f-cpu','f-ram','f-disk','f-temp'].forEach(id=>$(id).addEventListener('change', showInputs));
+$('btn-read').addEventListener('click', ()=>{ override=null; ciclo(); });
+let timer = null;
+$('btn-auto').addEventListener('click', e=>{
+  if (timer){ clearInterval(timer); timer=null; e.target.setAttribute('aria-pressed','false'); e.target.textContent='Lectura automática'; }
+  else { timer=setInterval(()=>{override=null;ciclo();},1000); e.target.setAttribute('aria-pressed','true'); e.target.textContent='Detener lectura automática'; }
+});
+$('btn-reset').addEventListener('click', ()=>{ resetMem(); override=null; ciclo(); });
+
+function setInputs(v){
+  $('cpu').value=v.cpu; $('ram').value=v.ram; $('disk').value=v.disk; $('temp').value=v.temp; $('idle').value=v.idle;
+  ['f-cpu','f-ram','f-disk','f-temp'].forEach(id=>$(id).checked=false); showInputs();
+}
+const ESC = {
+  normal:{cpu:35,ram:40,disk:60,temp:55,idle:0},
+  adv:{cpu:85,ram:66,disk:70,temp:78,idle:0},
+  crit:{cpu:97,ram:72,disk:96,temp:97,idle:0},
+  idle:{cpu:3,ram:20,disk:60,temp:42,idle:20}
+};
+document.querySelectorAll('[data-scn]').forEach(b=>b.addEventListener('click',()=>{ resetMem(); override=null; setInputs(ESC[b.dataset.scn]); ciclo(); }));
+
+// ---------------- Casos de prueba ----------------
+const N = {cpu:35, ramDgb:40, disk:60, temp:55, idle:0};
+const r = o => Object.assign({}, N, o);
+const CASOS = [
+  {id:'CP-01', d:'Escenario normal: todas las métricas en verde.', seq:[r({})], esp:0},
+  {id:'CP-02', d:'Límite inferior: CPU = 79 % (justo debajo de 80).', seq:[r({cpu:79})], esp:0},
+  {id:'CP-03', d:'Límite exacto: RAM 6,4 GB = 80 % (bandera Z = 1).', seq:[r({ramDgb:64})], esp:1},
+  {id:'CP-04', d:'Pico aislado: CPU = 97 % en una sola lectura.', seq:[r({cpu:97})], esp:1},
+  {id:'CP-05', d:'CPU = 97 % durante 3 lecturas seguidas.', seq:[r({cpu:97}),r({cpu:97}),r({cpu:97})], esp:2},
+  {id:'CP-06', d:'Temperatura = 95 °C en una lectura (crítico inmediato).', seq:[r({temp:95})], esp:2},
+  {id:'CP-07', d:'Disco usado = 96 %.', seq:[r({disk:96})], esp:2},
+  {id:'CP-08', d:'Falla de lectura de temperatura (sin dato: −1).', seq:[r({temp:-1})], esp:1},
+  {id:'CP-09', d:'Valor fuera de rango: CPU = 150 %.', seq:[r({cpu:150})], esp:1},
+  {id:'CP-10', d:'Sin usuario durante 20 min, todo en verde.', seq:[r({cpu:3,ramDgb:20,temp:42,idle:20})], esp:3},
+  {id:'CP-11', d:'Tendencia: temperatura 60, 62, 64 y 66 °C.', seq:[r({temp:60}),r({temp:62}),r({temp:64}),r({temp:66})], esp:0, tend:'SUBE'}
+];
+$('case-sel').innerHTML = CASOS.map((c,i)=>`<option value="${i}">${c.id} · ${c.d}</option>`).join('');
+$('case-sel').addEventListener('change', ()=>{ $('case-desc').textContent = CASOS[+$('case-sel').value].d; });
+$('case-desc').textContent = CASOS[0].d;
+function correr(c){
+  resetMem(); let est;
+  for (const v of c.seq){ override=v; est=ciclo(); }
+  override=null;
+  const tendOk = !c.tend || $('trend').textContent.includes(c.tend);
+  return {id:c.id, esp:NOMBRES[c.esp]+(c.tend?' + '+c.tend:''), obt:NOMBRES[est]+(c.tend?' + '+($('trend').textContent.split(': ')[1]||'').replace('.',''):''), ok: est===c.esp && tendOk};
+}
+function pintar(res){
+  $('results').innerHTML = res.map(x=>`<tr><td class="mono">${x.id}</td><td>${x.esp}</td><td>${x.obt}</td><td class="${x.ok?'pass':'failt'}">${x.ok?'PASA':'NO PASA'}</td></tr>`).join('');
+}
+$('btn-case').addEventListener('click', ()=>{ const c=CASOS[+$('case-sel').value]; pintar([correr(c)]); });
+$('btn-all').addEventListener('click', ()=>{ const res=CASOS.map(correr); pintar(res); });
+
+// Estado inicial visible
+showInputs(); ciclo();
+</script>
+</body>
+</html>
