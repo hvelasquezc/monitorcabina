@@ -424,8 +424,17 @@ function correr(c){
   resetMem(); let est;
   for (const v of c.seq){ override=v; est=ciclo(); }
   override=null;
+  syncInputs(c.seq[c.seq.length-1]);
   const tendOk = !c.tend || $('trend').textContent.includes(c.tend);
   return {id:c.id, esp:NOMBRES[c.esp]+(c.tend?' + '+c.tend:''), obt:NOMBRES[est]+(c.tend?' + '+($('trend').textContent.split(': ')[1]||'').replace('.',''):''), ok: est===c.esp && tendOk};
+}
+// Mueve los controles a los valores de la última lectura del caso ejecutado
+function syncInputs(v){
+  const put = (id, val, max) => { $('f-'+id).checked = val < 0; if (val >= 0) $(id).value = Math.min(val, max); };
+  put('cpu', v.cpu, 100); put('ram', v.ramDgb, 80); put('disk', v.disk, 100); put('temp', v.temp, 110);
+  $('idle').value = v.idle;
+  showInputs();
+  if (v.cpu > 100) $('o-cpu').textContent = v.cpu + ' % (fuera de rango)';
 }
 function pintar(res){
   $('results').innerHTML = res.map(x=>`<tr><td class="mono">${x.id}</td><td>${x.esp}</td><td>${x.obt}</td><td class="${x.ok?'pass':'failt'}">${x.ok?'PASA':'NO PASA'}</td></tr>`).join('');
